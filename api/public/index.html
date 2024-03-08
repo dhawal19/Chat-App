@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat App</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.min.js" integrity="sha512-skuhu6jj+sQnhLq1Txsack8VfnIrX8wL+MTFilYlFFT/NuLJm7eya7zOROs39Jy5cjASMEWqxLzijRVmKhsqWQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script>
+      const socket = io('http://localhost:3000');
+      const userId = Math.random().toString(36).substr(2, 9);
+      let receiveQueue = [];
+      let sentQueue = [];
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        const receiverId = document.getElementById('receiver').value;
+        const message = document.getElementById('message').value;
+        sentQueue.push({senderId: userId, receiverId, message}); // empty the queue when ack is received from the server
+        socket.emit('send_message', {
+          senderId: userId,
+          receiverId: receiverId,
+          message: message
+        })
+        document.getElementById('message').value = '';
+        document.getElementById('sent-messages').appendChild(document.createTextNode('You: ' + message + ' at ' + new Date().toLocaleTimeString() + ' to ' + receiverId))
+        document.getElementById('sent-messages').appendChild(document.createElement('br'))
+        
+      }
+
+      const handleFocusEvent = (e) => {
+        if(receiveQueue.length > 0) {
+          let unreadMessageCount = receiveQueue.length;
+          receiveQueue = [];
+          console.log(receiveQueue.length);
+          alert('You have ' + unreadMessageCount + ' unread messages');
+          window.removeEventListener('focus', handleFocusEvent);
+        }
+      }
+      const handleTyping =  (e) => {
+        receiverId = document.getElementById('receiver').value;
+        if(e.key === 'Enter'){
+          socket.emit('typing', {senderId: userId, receiverId, isTyping: false});
+        }
+        else{
+          socket.emit('typing', {senderId: userId, receiverId, isTyping: true});
+        }
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('username').innerText = userId;
+
+        document.getElementById('message-form').addEventListener("submit", handleSubmit);
+
+        document.getElementById('message').addEventListener('keypress', handleTyping)
+
+        document.getElementById('message').addEventListener('blur', ()=>{
+          receiverId = document.getElementById('receiver').value;
+          socket.emit('typing', {senderId: userId, receiverId, isTyping: false});
+        })
+
+          
+        socket.on('receive_message', (data) => {
+          document.getElementById('messages').appendChild(document.createTextNode(data.senderId + ': ' + data.message + ' at ' + new Date().toLocaleTimeString()))
+          document.getElementById('messages').appendChild(document.createElement('br'))
+          receiveQueue.push(data);
+        })
+
+
+        socket.on('typing', (data) => {
+          if(data.isTyping){
+            const typing = document.getElementById('typing');
+            if(typing.innerText === ''){
+              typing.innerText = data.senderId + ' is typing...'
+              document.getElementById('typing').appendChild(document.createElement('br'))
+            }
+          }
+          else{
+            typing.innerText = '';
+          }
+        })
+      })
+      
+      socket.emit('set_user_id', userId);
+
+      window.addEventListener('focus', handleFocusEvent);
+
+      window.addEventListener('beforeunload', () => {
+        socket.emit('disconnect', userId);
+      })
+      
+    </script>
+  </head>
+  <body>
+    <div style="text-align: center;">
+      <h1>Chat App</h1>
+    </div>
+
+    <div class="message-container">
+      
+        <h2 class="message-username" id="username"></h2>
+        <div class="messages" id="messages">
+          <h3>Messages</h3>
+        </div>
+        <form action=""  id="message-form">
+          <span id="typing"></span>
+          <input type="<text>" class="receiver" id="receiver" placeholder="Enter the receiver's ID">
+          <input type="text" name="message" id="message" placeholder="Type your message">
+          <button type="submit" >Send</button>
+        </form>
+        <br/>
+        <div class="sent-messages" id="sent-messages">
+          <h3>Sent Messages</h3>
+        </div>
+  
+    </div>
+  </body>
+
+</html>
